@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:context="http://www.springframework.org/schema/context"
+	xmlns:imaps="http://www.mulesoft.org/schema/mule/imaps"
+	xmlns:file="http://www.mulesoft.org/schema/mule/file"
+	xmlns:imap="http://www.mulesoft.org/schema/mule/imap" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" version="EE-3.6.1"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context-current.xsd
+http://www.mulesoft.org/schema/mule/imaps http://www.mulesoft.org/schema/mule/imaps/current/mule-imaps.xsd
+http://www.mulesoft.org/schema/mule/file http://www.mulesoft.org/schema/mule/file/current/mule-file.xsd
+http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/imap http://www.mulesoft.org/schema/mule/imap/current/mule-imap.xsd">
+    <context:property-placeholder location="classpath:email.properties"/>
+
+    <flow name="incoming-orders">
+        <imaps:inbound-endpoint user="${mail.user}" password="Techedge1" host="${mail.host}" 
+                     port="${mail.port}" doc:name="IMAP" responseTimeout="10000"/>
+    	<expression-transformer expression="#[($.value in message.inboundAttachments.entrySet() 
+    	if $.key ~= '(.*\\.xls|.*\\.XLS|.*\\.xlsm|.*\\.XLSM|.*\\.xlsx|.*\\.XLSX|.*\\.xml|.*\\.XML)')]" doc:name="Get Attachments"/>
+
+        <set-variable variableName="mailSender" value="#[org.mule.util.StringUtils.substringAfter(message.inboundProperties.fromAddress, '&lt;').replaceAll(&quot;&gt;&quot;, &quot;&quot;)]" doc:name="Set mailSender"/>    	<set-variable variableName="attachmentsList" value="#[message.payload]" doc:name="Set attachmentsList"/>
+		<set-payload value="#[attachmentsList]" doc:name="Set Attachments as Payload"/>
+        <foreach collection="#[attachmentsList]" doc:name="Foreach Attachment">
+                	<set-variable variableName="attachmentName" value="#[payload.name]" doc:name="Set attachmentName"/>
+                    <set-variable variableName="attachmentContent" value="#[payload.getContent()]" doc:name="Set attachmentContent"/>
+					<set-payload value="#[attachmentContent]" doc:name="Set attachmentContent as Payload"/>
+            <base64-encoder-transformer name="base64-encoder-transformer" encoding="UTF-8"></base64-encoder-transformer>
+            <set-payload value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot; standalone=&quot;yes&quot;?&gt;&lt;KissA&gt;&lt;SenderMail&gt;#[mailSender]&lt;/SenderMail&gt;&lt;FileName&gt;#[attachmentName]&lt;/FileName&gt;&lt;DataFile&gt;#[payload]&lt;/DataFile&gt;&lt;/KissA&gt;" doc:name="Create the XML"/>
+            <logger level="INFO" doc:name="Logger"/>
+            <file:outbound-endpoint path="C:\Users\Mahsa\MuleSoft\ReceivedMail" outputPattern="#[attachmentName].xml" responseTimeout="10000" doc:name="File"/>
+        </foreach>
+     </flow>
+</mule>
